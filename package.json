@@ -1,6 +1,6 @@
 {
   "name": "@uboness/homebridge-starling",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "author": "uboness",
   "publishConfig": {
     "@uboness:registry": "https://registry.npmjs.org "
@@ -50,6 +50,7 @@
   },
   "devDependencies": {
     "@types/node": "^18.16.20",
+    "commit-and-tag-version": "^12.2.0",
     "homebridge": "^1.6.0",
     "homebridge-config-ui-x": "^4.55.1",
     "rimraf": "^3.0.2",
