@@ -1,26 +1,27 @@
 import {
     API,
+    Characteristic,
     DynamicPlatformPlugin,
     Logger,
     PlatformAccessory,
     PlatformConfig,
-    Service,
-    Characteristic
+    Service
 } from 'homebridge';
-
-import { Device, Devices } from './device/index.js';
-import { __Name__Bridge } from './bridge/index.js';
 import { asyncForEach, isString, isUndefined, spliceFirstMatch } from './common.js';
-import { PLATFORM_NAME, PLUGIN_NAME } from './settings.js';
+
+import { Devices } from './device/index.js';
+import { StarlingDevice } from './device/StarlingDevice.js';
 import { ContextLogger, ILogger } from './Logger.js';
-import { __Name__Device } from './bridge/__Name__Device.js';
+import { PLATFORM_NAME, PLUGIN_NAME } from './settings.js';
+import { Starling } from './Starling.js';
+import { StarlingHub } from './StarlingHub.js';
 
 /**
  * HomebridgePlatform
  * This class is the main constructor for your plugin, this is where you should
  * parse the user config and discover/register accessories with Homebridge.
  */
-export class __Name__Platform implements DynamicPlatformPlugin {
+export class StarlingPlatform implements DynamicPlatformPlugin {
 
     public readonly Service: typeof Service;
     public readonly Characteristic: typeof Characteristic;
@@ -30,8 +31,8 @@ export class __Name__Platform implements DynamicPlatformPlugin {
     private readonly api: API;
     private readonly accessories: PlatformAccessory[] = [];
 
-    private bridge?: __Name__Bridge;
-    private readonly devices: Device[] = [];
+    private hub?: StarlingHub;
+    private readonly devices: StarlingDevice[] = [];
 
     constructor(log: Logger, config: PlatformConfig, api: API) {
         this.logger = new ContextLogger(log);
@@ -49,94 +50,92 @@ export class __Name__Platform implements DynamicPlatformPlugin {
 
     async discoverDevices() {
 
-        this.bridge = await this.initBridge();
+        this.hub = await this.initHub();
+        if (!this.hub) {
+            return;
+        }
 
         // first, let's clean up the cached accessories that are no long available
         const indices = [] as number[];
         await asyncForEach(this.accessories, async (accessory, i) => {
-            if (!await this.bridge?.getDevice(accessory.context.id)) {
+            if (!this.hub!.device(accessory.context.deviceId)) {
+                this.logger.debug(`Device [${accessory.context.deviceName}][${accessory.context.deviceId}] no longer exists, Unregistering it...`);
                 indices.push(i);
             }
         });
         indices.forEach(i => this.accessories.splice(i, 1));
 
         // now register all accessories
-        const devices = await this.bridge.listDevices();
+        const devices = this.hub!.devices;
         for (const device of devices) {
-            await this.registerDevice(this.bridge, device);
+            await this.registerDevice(this.hub!, device);
         }
 
-        this.bridge.on('availability', async availability => {
-            this.devices.forEach(device => device.available = availability.available);
-            if (availability.available) {
-                return this.refreshDevices(this.bridge!);
+        this.hub.on('availability', async available => {
+            this.devices.forEach(device => device.available = available);
+            if (available) {
+                return this.refreshDevices(this.hub!);
             }
         });
 
-        this.bridge.on('deviceStateChanged', change => {
-            const device = this.devices.find(device => device.id === change.deviceId);
+        this.hub.on('deviceUpdated', starlingDevice => {
+            const device = this.devices.find(device => device.id === starlingDevice.id);
             if (device) {
-                device.update(change.state);
+                device.update(starlingDevice);
             }
         });
 
-        this.bridge.on('deviceAdded', device => {
-            this.registerDevice(this.bridge!, device);
+        this.hub.on('deviceAdded', starlingDevice => {
+            this.registerDevice(this.hub!, starlingDevice);
         });
 
-        this.bridge.on('deviceRemoved', event => {
-            this.unregisterDevice(this.bridge!, event.deviceId);
+        this.hub.on('deviceRemoved', id => {
+            this.unregisterDevice(this.hub!, id);
         });
 
     }
 
-    async initBridge(): Promise<__Name__Bridge> {
-        return new __Name__Bridge(this.config);
+    async initHub(): Promise<StarlingHub | undefined> {
+        try {
+            return await StarlingHub.create(this.config, this.logger);
+        } catch (error) {
+            this.logger.error(`Failed to initialize starling hub. ${error}`);
+        }
     }
 
-    async registerDevice(bridge: __Name__Bridge, device: __Name__Device) {
-        if (isUndefined(Devices[device.type])) {
+    async registerDevice(hub: StarlingHub, starlingDevice: Starling.Device) {
+        if (isUndefined(Devices[starlingDevice.type])) {
             return
         }
 
         // generate a unique id for the accessory this should be generated from
         // something globally unique, but constant, for example, the device serial
         // number or MAC address
-        const uuid = this.api.hap.uuid.generate(`${bridge.id}:${device.type}:${device.serialNumber}`);
+        const uuid = this.api.hap.uuid.generate(`${starlingDevice.id}:${starlingDevice.type}`);
 
         // see if an accessory with the same uuid has already been registered and restored from
         // the cached devices we stored in the `configureAccessory` method above
         let accessory = this.accessories.find(accessory => accessory.UUID === uuid);
 
         if (!accessory) {
-            const deviceName = device.name || device.type;
+            const deviceName = `${starlingDevice.where} ${starlingDevice.name}`;
             accessory = new this.api.platformAccessory(deviceName, uuid);
-            accessory.context.bridgeId = bridge.id;
-            accessory.context.bridgeName = bridge.name
-            accessory.context.deviceId = device.id;
+            accessory.context.deviceId = starlingDevice.id;
             accessory.context.deviceName = deviceName;
-            this.logger.info(`[${bridge.name}] registering [${device.type}] device [${accessory.displayName}]`);
+            this.logger.info(`[${hub.name}] registering [${starlingDevice.type}] device [${accessory.displayName}]`);
             this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [ accessory ]);
             this.accessories.push(accessory);
         } else {
-            this.logger.info(`[${bridge.name}] found [${device.type}] device [${accessory.displayName}]`);
-        }
-
-        if (bridge.identifyDevice) {
-            accessory.on('identify', async () => {
-                this.logger.debug(`Identifying [${bridge.name}][${device.id}]`);
-                await bridge.identifyDevice!(device.id);
-            });
+            this.logger.info(`found [${starlingDevice.type}] device [${accessory.displayName}]`);
         }
 
         accessory.getService(this.Service.AccessoryInformation)!
             .setCharacteristic(this.Characteristic.Name, accessory.displayName)
-            .setCharacteristic(this.Characteristic.Manufacturer, device.manufacturer)
-            .setCharacteristic(this.Characteristic.Model, device.model)
-            .setCharacteristic(this.Characteristic.FirmwareRevision, device.version)
-            .setCharacteristic(this.Characteristic.SerialNumber, device.serialNumber);
+            .setCharacteristic(this.Characteristic.Manufacturer, 'Nest')
+            .setCharacteristic(this.Characteristic.Model, starlingDevice.type)
+            .setCharacteristic(this.Characteristic.SerialNumber, starlingDevice.serialNumber);
 
-        this.devices.push(await Devices[device.type]!.create(this, bridge, accessory, device));
+        this.devices.push(await Devices[starlingDevice.type]!.create(this, hub, accessory, starlingDevice));
     }
 
     /**
@@ -147,8 +146,8 @@ export class __Name__Platform implements DynamicPlatformPlugin {
      *   - if some devices were introduced in DIREGERA, they should then be registered with HB
      *   - for all the already existing devices, their attributes should be updated.
      */
-    private async refreshDevices(bridge: __Name__Bridge) {
-        const freshDevices = await bridge.listDevices();
+    private async refreshDevices(hub: StarlingHub) {
+        const freshDevices = hub.devices;
         await asyncForEach(this.devices, async knownDevice => {
             const freshDevice = freshDevices.find(freshDevice => freshDevice.id === knownDevice.id);
             if (freshDevice) {
@@ -156,17 +155,17 @@ export class __Name__Platform implements DynamicPlatformPlugin {
                 await knownDevice.update(freshDevice);
             } else {
                 // the known device no longer exists in the bridge, we'll need to remove/unregister it
-                await this.unregisterDevice(bridge, knownDevice);
+                await this.unregisterDevice(hub, knownDevice);
             }
         });
         await asyncForEach(freshDevices, async device => {
             if (!this.devices.find(knownDevice => knownDevice.id === device.id)) {
-                await this.registerDevice(this.bridge!, device);
+                await this.registerDevice(hub, device);
             }
         });
     }
 
-    private async unregisterDevice(bridge: __Name__Bridge, deviceOrId: Device | string) {
+    private async unregisterDevice(hub: StarlingHub, deviceOrId: StarlingDevice | string) {
         const deviceId = isString(deviceOrId) ? deviceOrId : deviceOrId.id;
         const deviceIndex = this.devices.findIndex(device => device.id === deviceId);
         if (deviceIndex < 0) {
@@ -174,7 +173,7 @@ export class __Name__Platform implements DynamicPlatformPlugin {
             return;
         }
         const [ registeredDevice ] = this.devices.splice(deviceIndex, 1);
-        this.logger.info(`Unregistering accessory [${bridge.name}][${registeredDevice.accessory.displayName}] (no longer available)`);
+        this.logger.info(`Unregistering accessory [${hub.name}][${registeredDevice.accessory.displayName}] (no longer available)`);
         this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [ registeredDevice.accessory ]);
         spliceFirstMatch(this.accessories, accessory => accessory.UUID === registeredDevice.accessory.UUID);
         await registeredDevice.close();

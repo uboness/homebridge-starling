@@ -1,11 +1,11 @@
 import { API } from 'homebridge';
 
-import { PLATFORM_NAME } from './settings';
-import { __Name__Platform } from './__Name__Platform';
+import { PLATFORM_NAME } from './settings.js';
+import { StarlingPlatform } from './StarlingPlatform.js';
 
 /**
  * This method registers the platform with Homebridge
  */
 export = (api: API) => {
-  api.registerPlatform(PLATFORM_NAME, __Name__Platform);
+  api.registerPlatform(PLATFORM_NAME, StarlingPlatform);
 };

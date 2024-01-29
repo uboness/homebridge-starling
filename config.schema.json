@@ -1,16 +1,47 @@
 {
-  "pluginAlias": "ExampleHomebridgePlugin",
+  "pluginAlias": "starling",
   "pluginType": "platform",
   "singular": true,
   "schema": {
     "type": "object",
     "properties": {
+      "host": {
+        "title": "Host/IP",
+        "type": "string",
+        "required": true,
+        "format": "hostname"
+      },
+      "apiKey": {
+        "title": "API Key",
+        "type": "string",
+        "required": true
+      },
       "name": {
         "title": "Name",
         "type": "string",
-        "required": true,
-        "default": "Example Dynamic Platform"
+        "required": false,
+        "minLength": 1
+      },
+      "pollingInterval": {
+        "title": "Polling Interval (in seconds)",
+        "type": "number",
+        "required": false,
+        "placeholder": 5
       }
     }
-  }
+  },
+  "form": [
+    "host",
+    "apiKey",
+    "name",
+    {
+      "type": "fieldset",
+      "expandable": true,
+      "title": "Advanced Settings",
+      "description": "Don't change these, unless you understand what you're doing.",
+      "items": [
+        "pollingInterval"
+      ]
+    }
+  ]
 }
