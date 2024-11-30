@@ -118,7 +118,7 @@ export class StarlingPlatform implements DynamicPlatformPlugin {
         let accessory = this.accessories.find(accessory => accessory.UUID === uuid);
 
         if (!accessory) {
-            const deviceName = `${starlingDevice.where} ${starlingDevice.name}`;
+            const deviceName = starlingDevice.name;
             accessory = new this.api.platformAccessory(deviceName, uuid);
             accessory.context.deviceId = starlingDevice.id;
             accessory.context.deviceName = deviceName;

@@ -1,4 +1,4 @@
-import { PlatformAccessory, Service } from 'homebridge';
+import { Characteristic, PlatformAccessory, Service } from 'homebridge';
 import { ILogger } from '../Logger.js';
 import { Starling } from '../Starling.js';
 import { StarlingHub } from '../StarlingHub.js';
@@ -16,6 +16,8 @@ export abstract class StarlingDevice<Device extends Starling.Device = Starling.D
 
     private _available: boolean;
 
+    protected readonly fault: Characteristic;
+
     protected constructor(platform: StarlingPlatform, hub: StarlingHub, accessory: PlatformAccessory, device: Device, service: Service) {
         this.platform = platform;
         this.hub = hub;
@@ -26,11 +28,8 @@ export abstract class StarlingDevice<Device extends Starling.Device = Starling.D
         this._available = true;
         this.service.setPrimaryService(true);
         this.service.setCharacteristic(platform.Characteristic.Name, accessory.displayName);
-        let status = this.service.getCharacteristic(platform.Characteristic.StatusActive);
-        if (!status) {
-            status = this.service.addCharacteristic(platform.Characteristic.StatusActive);
-        }
-        status.setValue(this.available);
+        this.fault = this.service.getCharacteristic(platform.Characteristic.StatusFault) ?? this.service.addCharacteristic(platform.Characteristic.StatusFault);
+        this.fault.setValue(!this.available);
     }
 
     abstract update(device: Device);
@@ -55,7 +54,7 @@ export abstract class StarlingDevice<Device extends Starling.Device = Starling.D
 
     set available(available: boolean) {
         this._available = available;
-        this.service.getCharacteristic(this.platform.Characteristic.StatusActive).updateValue(available);
+        this.fault.updateValue(!available);
     }
 
 }
