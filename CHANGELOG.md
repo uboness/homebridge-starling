@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.1.1](https://github.com/uboness/{{name}}/compare/v0.1.0...v0.1.1) (2024-12-22)
+
+
+### Bug Fixes
+
+* removed use of inner HB api (in logger) ([910f0cc](https://github.com/uboness/{{name}}/commit/910f0cc6de38f2d47e5ae68fcff57f125cc231bb))
+
 ## [0.1.0](https://github.com/uboness/{{name}}/compare/v0.0.2...v0.1.0) (2024-11-30)
 
 
