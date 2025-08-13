@@ -10,6 +10,8 @@ Homebridge plugin for [Starling Home Hub](https://www.starlinghome.io/) (for Nes
 
 ### !! Experimental !!
 
+[![Build](https://github.com/uboness/homebridge-starling/actions/workflows/build.yml/badge.svg)](https://github.com/uboness/homebridge-starling/actions/workflows/build.yml)
+
 </span>
 
 
