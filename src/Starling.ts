@@ -1,8 +1,3 @@
-// @ts-expect-error
-import type { GotRequestFunction, HTTPAlias } from 'got';
-
-type GotClient = Record<HTTPAlias, GotRequestFunction>;
-
 export namespace Starling {
 
     export type Status = {
@@ -51,37 +46,37 @@ export namespace Starling {
     export class API {
 
         static readonly create = async (host: string, key: string): Promise<API> => {
-            const { got } = await import('got');
-            const client = got.extend({
-                responseType: 'json',
-                prefixUrl: `http://${host}:3080/api/connect/v1`,
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                searchParams: { key },
-                timeout: {
-                    request: 5000
-                }
-                // throwHttpErrors: false
+            return new API(`http://${host}:3080/api/connect/v1`, key);
+        }
+
+        private readonly baseUrl: string;
+        private readonly key: string;
+
+        private constructor(baseUrl: string, key: string) {
+            this.baseUrl = baseUrl;
+            this.key = key;
+        }
+
+        private async get<T>(path: string): Promise<T> {
+            const url = `${this.baseUrl}/${path}?key=${encodeURIComponent(this.key)}`;
+            const res = await fetch(url, {
+                headers: { 'Content-Type': 'application/json' },
+                signal: AbortSignal.timeout(5000)
             });
-            return new API(client);
+            if (!res.ok) {
+                throw new Error(`Request to ${path} failed: ${res.status} ${res.statusText}`);
+            }
+            return await res.json() as T;
         }
 
-        private readonly client: GotClient;
-
-        private constructor(client: GotClient) {
-            this.client = client;
-        }
-
-        async  status(): Promise<Status> {
-            const resp = await this.client.get<Status>('status');
-            return resp.body;
+        async status(): Promise<Status> {
+            return this.get<Status>('status');
         }
 
         async devices(infoOnly?: true): Promise<DeviceInfo[]>;
         async devices(infoOnly: false): Promise<Device[]>;
         async devices(infoOnly: boolean = true): Promise<DeviceInfo[] | Device[]> {
-            const { body: { devices: infos } } = await this.client.get<DevicesResp>('devices');
+            const { devices: infos } = await this.get<DevicesResp>('devices');
             if (infoOnly) {
                 return infos;
             }
@@ -93,8 +88,8 @@ export namespace Starling {
         }
 
         async device(id: string): Promise<Device> {
-            const { body }  = await this.client.get<DeviceResp>(`devices/${id}`);
-            return body.properties;
+            const { properties } = await this.get<DeviceResp>(`devices/${id}`);
+            return properties;
         }
 
     }
